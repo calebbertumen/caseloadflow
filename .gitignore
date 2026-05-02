@@ -1,5 +1,28 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# --- Secrets & local config (never commit real values) ---
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+credentials.json
+*-credentials.json
+service-account*.json
+.secrets/
+secrets/
+
+# Cursor / IDE — ignore files that often hold API keys (keep .cursor/rules if you use them)
+.cursor/mcp.json
+.cursor/mcp.*.json
+.idea/
+*.swp
+*.swo
+
 # dependencies
 /node_modules
 /.pnp
@@ -19,23 +42,30 @@
 
 # production
 /build
+dist/
 
 # misc
 .DS_Store
-*.pem
+Thumbs.db
 
-# debug
+# debug & logs (can include paths or tokens in stack traces)
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env*
+*.log
 
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
+
+# caches
+.turbo
+.cache
+
+# local databases / exports (if you add them later)
+*.sqlite
+*.sqlite3
+*.db
