@@ -15,7 +15,7 @@ const mono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "CaseloadFlow — School SLP scheduling without spreadsheet chaos",
+    default: "CaseloadFlow: School SLP scheduling without spreadsheet chaos",
     template: "%s · CaseloadFlow",
   },
   description:

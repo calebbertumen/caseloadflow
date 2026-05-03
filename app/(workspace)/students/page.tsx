@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Pencil, Plus, Sparkles, Trash2, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -21,23 +22,19 @@ import {
 } from "@/components/ui/table";
 import { StudentDialog } from "@/components/students/student-dialog";
 import { useCaseload } from "@/components/providers/caseload-provider";
+import { cn } from "@/lib/utils";
 import { summarizeStudentMinutes } from "@/lib/minute-utils";
 import { studentColorDotClass } from "@/lib/student-colors";
-import type { Student } from "@/lib/types";
+import type { Student, StudentMinuteSummary } from "@/lib/types";
 import type { StudentFormValues } from "@/lib/validation";
 
-function minuteBadge(status: "complete" | "partial" | "missing") {
-  if (status === "complete") return <Badge variant="secondary">Complete</Badge>;
-  if (status === "partial") return <Badge variant="outline">Partial</Badge>;
-  return <Badge variant="destructive">Needs minutes</Badge>;
-}
-
-function scheduleBadge(
-  s: "scheduled" | "partially_scheduled" | "unscheduled"
-) {
-  if (s === "scheduled") return <Badge variant="secondary">Scheduled</Badge>;
-  if (s === "partially_scheduled")
-    return <Badge variant="outline">Partially scheduled</Badge>;
+function statusBadge(summary: StudentMinuteSummary) {
+  if (summary.scheduleStatus === "scheduled") {
+    return <Badge variant="secondary">Complete</Badge>;
+  }
+  if (summary.scheduleStatus === "partially_scheduled") {
+    return <Badge variant="outline">Needs minutes</Badge>;
+  }
   return <Badge variant="destructive">Unscheduled</Badge>;
 }
 
@@ -85,8 +82,9 @@ export default function StudentsPage() {
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
             Students
           </h1>
-          <p className="text-muted-foreground">
-            Your caseload list drives minutes tracking and session assignment.
+          <p className="max-w-2xl text-sm text-muted-foreground md:text-base">
+            Add students or initials, weekly service minutes, teacher or classroom
+            labels, and session preferences.
           </p>
         </div>
         <Button onClick={openNew}>
@@ -96,23 +94,42 @@ export default function StudentsPage() {
       </div>
 
       {state.students.length === 0 ? (
-        <Card>
+        <Card className="border-border/80 shadow-sm">
           <CardHeader>
-            <CardTitle>No students yet</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Users className="size-5 shrink-0 text-primary/80" aria-hidden />
+              No students yet
+            </CardTitle>
             <CardDescription>
-              Add your first student to start building your schedule. Names,
-              grades, and weekly IEP minutes are enough to begin.
+              Your caseload list is the foundation for minute tracking and session
+              assignment.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button onClick={openNew}>
-              <Plus className="size-4" />
-              Add your first student
-            </Button>
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <Button type="button" size="lg" className="w-full sm:w-auto" onClick={openNew}>
+                <Plus className="size-4" />
+                Add first student
+              </Button>
+              <Link
+                href="/demo"
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "lg" }),
+                  "inline-flex w-full items-center justify-center gap-2 sm:w-auto"
+                )}
+              >
+                <Sparkles className="size-4" aria-hidden />
+                Load sample data
+              </Link>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Privacy tip: use initials, first names, or nicknames instead of full
+              legal names.
+            </p>
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card className="border-border/80 shadow-sm">
           <CardHeader className="sr-only">
             <CardTitle>Caseload table</CardTitle>
           </CardHeader>
@@ -121,14 +138,13 @@ export default function StudentsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Student</TableHead>
-                    <TableHead className="hidden md:table-cell">Teacher</TableHead>
-                    <TableHead className="text-right">IEP min / wk</TableHead>
-                    <TableHead className="text-right hidden sm:table-cell">
-                      Scheduled
-                    </TableHead>
-                    <TableHead>Minutes</TableHead>
-                    <TableHead className="hidden lg:table-cell">On schedule</TableHead>
+                    <TableHead>Name / label</TableHead>
+                    <TableHead className="hidden sm:table-cell">Grade</TableHead>
+                    <TableHead className="hidden md:table-cell">Teacher / classroom</TableHead>
+                    <TableHead className="text-right">Required</TableHead>
+                    <TableHead className="text-right hidden lg:table-cell">Scheduled</TableHead>
+                    <TableHead className="text-right hidden lg:table-cell">Remaining</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -143,25 +159,26 @@ export default function StudentsPage() {
                           />
                           <div>
                             <div className="font-medium">{stu.name}</div>
-                            <div className="text-xs text-muted-foreground">
+                            <div className="text-xs text-muted-foreground sm:hidden">
                               {stu.grade} · {stu.sessionType}
                             </div>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="hidden md:table-cell text-muted-foreground">
+                      <TableCell className="hidden sm:table-cell">{stu.grade}</TableCell>
+                      <TableCell className="hidden max-w-[200px] truncate text-muted-foreground md:table-cell">
                         {stu.teacher}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {stu.requiredMinutesPerWeek}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums hidden sm:table-cell">
+                      <TableCell className="text-right tabular-nums hidden lg:table-cell">
                         {summary.scheduled}
                       </TableCell>
-                      <TableCell>{minuteBadge(summary.status)}</TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        {scheduleBadge(summary.scheduleStatus)}
+                      <TableCell className="text-right tabular-nums hidden lg:table-cell">
+                        {summary.remaining}
                       </TableCell>
+                      <TableCell>{statusBadge(summary)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
                           <Button

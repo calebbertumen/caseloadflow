@@ -2,7 +2,9 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { Printer } from "lucide-react";
+import { usePrintAnalytics } from "@/components/analytics/use-print-analytics";
+import { useWorkspaceNudges } from "@/components/feedback/workspace-nudge-context";
+import { Printer, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -25,13 +27,13 @@ import { cn } from "@/lib/utils";
 import { DAY_LABELS, DAY_SHORT } from "@/lib/constants";
 import { detectConflicts } from "@/lib/conflict-utils";
 import { allStudentMinuteSummaries, summarizeStudentMinutes } from "@/lib/minute-utils";
-import {
-  sessionDurationMinutes,
-} from "@/lib/schedule-utils";
+import { sessionDurationMinutes } from "@/lib/schedule-utils";
 import type { DayOfWeek } from "@/lib/types";
 
 export default function ExportPage() {
   const { state, hydrated } = useCaseload();
+  const { showScheduleUseful } = useWorkspaceNudges();
+  usePrintAnalytics(state, "export", showScheduleUseful);
   const conflicts = useMemo(() => detectConflicts(state), [state]);
   const summaries = useMemo(() => allStudentMinuteSummaries(state), [state]);
   const unscheduled = useMemo(
@@ -57,6 +59,8 @@ export default function ExportPage() {
     return m;
   }, [state]);
 
+  const hasSessions = state.sessions.length > 0;
+
   if (!hydrated) {
     return <div className="h-40 animate-pulse rounded-xl bg-muted" />;
   }
@@ -66,27 +70,69 @@ export default function ExportPage() {
       <div className="no-print flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div className="space-y-1">
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            Export & print
+            Print & export
           </h1>
-          <p className="text-muted-foreground">
-            Use your browser print dialog for a clean handout. No PDF service
-            required in this MVP.
+          <p className="max-w-2xl text-sm text-muted-foreground md:text-base">
+            Print a clean weekly schedule, service-minute summary, and conflict
+            summary from your current workspace.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" onClick={() => window.print()}>
-            <Printer className="size-4" />
-            Print
-          </Button>
-          <Link
-            href="/schedule"
-            className={cn(buttonVariants({ variant: "outline" }))}
-          >
-            Back to schedule
+          {hasSessions ? (
+            <Button type="button" onClick={() => window.print()}>
+              <Printer className="size-4" />
+              Print schedule
+            </Button>
+          ) : null}
+          <Link href="/schedule" className={cn(buttonVariants({ variant: "outline" }))}>
+            Go to schedule
           </Link>
+          {hasSessions ? (
+            <Link
+              href="/settings"
+              className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-muted-foreground")}
+            >
+              Export workspace backup
+            </Link>
+          ) : null}
         </div>
       </div>
 
+      <p className="no-print text-xs text-muted-foreground">
+        Need a full workspace backup?{" "}
+        <Link href="/settings" className="font-medium text-primary underline-offset-4 hover:underline">
+          Export from Settings
+        </Link>
+        .
+      </p>
+
+      {!hasSessions ? (
+        <Card className="no-print border-border/80 shadow-sm">
+          <CardHeader>
+            <CardTitle>No sessions to print yet</CardTitle>
+            <CardDescription>
+              Add students and build your weekly schedule before printing.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 sm:flex-row">
+            <Link href="/schedule" className={cn(buttonVariants(), "w-full sm:w-auto")}>
+              Build schedule
+            </Link>
+            <Link
+              href="/demo"
+              className={cn(
+                buttonVariants({ variant: "outline" }),
+                "inline-flex w-full items-center justify-center gap-2 sm:w-auto"
+              )}
+            >
+              <Sparkles className="size-4" aria-hidden />
+              Load sample data
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {hasSessions ? (
       <div className="print-break-inside-avoid space-y-8">
         <header className="border-b pb-4">
           <h2 className="text-xl font-semibold">Weekly therapy schedule</h2>
@@ -118,7 +164,7 @@ export default function ExportPage() {
                   (byDay.get(d) ?? []).map((s) => (
                     <TableRow key={s.id}>
                       <TableCell className="tabular-nums">
-                        {s.startTime}–{s.endTime}
+                        {s.startTime}-{s.endTime}
                       </TableCell>
                       <TableCell>
                         {s.studentIds
@@ -126,11 +172,11 @@ export default function ExportPage() {
                             (id) =>
                               state.students.find((x) => x.id === id)?.name ?? id
                           )
-                          .join(", ") || "—"}
+                          .join(", ") || "-"}
                       </TableCell>
                       <TableCell>{s.sessionType}</TableCell>
                       <TableCell>
-                        {s.countsTowardMinutes ? `${sessionDurationMinutes(s)} min` : "—"}
+                        {s.countsTowardMinutes ? `${sessionDurationMinutes(s)} min` : "-"}
                       </TableCell>
                     </TableRow>
                   ))
@@ -200,26 +246,31 @@ export default function ExportPage() {
                 const sum = summarizeStudentMinutes(s, state.sessions);
                 return (
                   <li key={s.id}>
-                    {s.name} — {sum.scheduled}/{sum.required} min placed
+                    {s.name}: {sum.scheduled}/{sum.required} min placed
                   </li>
                 );
               })}
             </ul>
           )}
         </section>
-      </div>
 
-      <Card className="no-print">
+        <footer className="border-t pt-4 text-center text-xs text-muted-foreground">
+          Created with CaseloadFlow
+        </footer>
+      </div>
+      ) : null}
+
+      <Card className="no-print border-border/80 shadow-sm">
         <CardHeader>
           <CardTitle className="text-base">Printing tips</CardTitle>
           <CardDescription>
-            In the print dialog, disable headers/footers for a cleaner page, and
-            choose “Save as PDF” if you want a file without uploading anything.
+            In the print dialog, disable headers and footers for a cleaner page, and
+            choose Save as PDF if you want a file without uploading anything.
           </CardDescription>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          Day columns in the app use {DAY_SHORT[0]}–{DAY_SHORT[4]} labels; this
-          export lists each weekday in order for handouts.
+          Day columns in the app use {DAY_SHORT[0]}-{DAY_SHORT[4]} labels; this export
+          lists each weekday in order for handouts.
         </CardContent>
       </Card>
     </div>

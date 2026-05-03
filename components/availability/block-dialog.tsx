@@ -200,7 +200,7 @@ export function BlockDialog({
               <option value="teacher">Teacher / classroom (reference)</option>
             </select>
             <p className="text-xs text-muted-foreground">
-              “Teacher / classroom” is for your notes today — conflict checks use
+              “Teacher / classroom” is for your notes today; conflict checks use
               global, SLP, and student-specific blocks.
             </p>
           </div>

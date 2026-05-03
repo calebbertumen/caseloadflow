@@ -38,6 +38,8 @@ type Props = {
   session?: Session | null;
   studentOptions: { id: string; name: string }[];
   defaultDay?: Session["dayOfWeek"];
+  /** When adding a session, prefill start (and next slot as end) from a grid click. */
+  defaultStartTime?: string;
   onSave: (values: SessionFormValues) => void;
 };
 
@@ -52,12 +54,19 @@ const defaults: SessionFormValues = {
   countsTowardMinutes: true,
 };
 
+function endTimeAfterStart(startTime: string): string {
+  const i = slotOptions.indexOf(startTime);
+  if (i >= 0 && i + 1 < slotOptions.length) return slotOptions[i + 1]!;
+  return defaults.endTime;
+}
+
 export function SessionDialog({
   open,
   onOpenChange,
   session,
   studentOptions,
   defaultDay = 0,
+  defaultStartTime,
   onSave,
 }: Props) {
   const form = useForm<SessionFormValues>({
@@ -81,9 +90,11 @@ export function SessionDialog({
         countsTowardMinutes: session.countsTowardMinutes,
       });
     } else {
-      form.reset({ ...defaults, dayOfWeek: defaultDay });
+      const start = defaultStartTime ?? defaults.startTime;
+      const end = defaultStartTime ? endTimeAfterStart(defaultStartTime) : defaults.endTime;
+      form.reset({ ...defaults, dayOfWeek: defaultDay, startTime: start, endTime: end });
     }
-  }, [open, session?.id, defaultDay]);
+  }, [open, session?.id, defaultDay, defaultStartTime]);
 
   const toggleStudent = (id: string, checked: boolean) => {
     const cur = form.getValues("studentIds");

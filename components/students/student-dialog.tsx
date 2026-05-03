@@ -1,8 +1,10 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Info } from "lucide-react";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { STUDENT_COLOR_OPTIONS } from "@/lib/student-colors";
+import { PRIVACY_REMINDER_COPY } from "@/lib/constants";
 import type { Student } from "@/lib/types";
 import { studentFormSchema, type StudentFormValues } from "@/lib/validation";
 
@@ -67,10 +70,16 @@ export function StudentDialog({ open, onOpenChange, student, onSave }: Props) {
         <DialogHeader>
           <DialogTitle>{student ? "Edit student" : "Add student"}</DialogTitle>
           <DialogDescription>
-            Keep it simple — you can always come back and adjust minutes or
+            Keep it simple. You can always come back and adjust minutes or
             preferences.
           </DialogDescription>
         </DialogHeader>
+        <Alert className="border-primary/20 bg-primary/5 text-left">
+          <Info className="text-primary" aria-hidden />
+          <AlertDescription className="text-muted-foreground sm:text-sm">
+            {PRIVACY_REMINDER_COPY}
+          </AlertDescription>
+        </Alert>
         <form
           className="space-y-4"
           onSubmit={form.handleSubmit((values) => {

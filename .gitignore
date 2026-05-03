@@ -16,7 +16,7 @@ service-account*.json
 .secrets/
 secrets/
 
-# Cursor / IDE — ignore files that often hold API keys (keep .cursor/rules if you use them)
+# Cursor / IDE: ignore files that often hold API keys (keep .cursor/rules if you use them)
 .cursor/mcp.json
 .cursor/mcp.*.json
 .idea/

@@ -1,6 +1,6 @@
-/** Core domain types — structured for a future Supabase/Postgres migration. */
+/** Core domain types, structured for a future Supabase/Postgres migration. */
 
-export type DayOfWeek = 0 | 1 | 2 | 3 | 4; // Monday–Friday
+export type DayOfWeek = 0 | 1 | 2 | 3 | 4; // Monday-Friday
 
 export type SessionType = "individual" | "group" | "flexible";
 
@@ -91,6 +91,16 @@ export interface AppState {
   availabilityBlocks: AvailabilityBlock[];
   sessions: Session[];
   settings: AppSettings;
+}
+
+/** All user-editable workspace fields persisted locally (conflicts are derived). */
+export type WorkspaceData = AppState;
+
+/** JSON file shape for backup export / import. */
+export interface WorkspaceExportDocument {
+  caseloadflowWorkspaceFile: number;
+  exportedAt: string;
+  workspace: WorkspaceData;
 }
 
 export type MinuteStatus = "complete" | "partial" | "missing";

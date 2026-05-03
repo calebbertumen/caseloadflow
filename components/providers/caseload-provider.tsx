@@ -6,11 +6,23 @@ import {
   useContext,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { demoAppState, emptyAppState } from "@/lib/mock-data";
 import { newId } from "@/lib/id";
-import { loadAppState, saveAppState } from "@/lib/storage";
+import {
+  buildSafeAnalyticsContext,
+  trackEvent,
+} from "@/lib/analytics";
+import {
+  buildWorkspaceExportJson,
+  loadAppState,
+  loadWorkspaceMeta,
+  parseWorkspaceImportJson,
+  saveAppState,
+  suggestedBackupFilename,
+} from "@/lib/storage";
 import type {
   AppState,
   AvailabilityBlock,
@@ -18,13 +30,24 @@ import type {
   Student,
 } from "@/lib/types";
 
+const DEBOUNCE_MS = 480;
+
+export type PersistStatus = "saved" | "unsaved" | "saving";
+
 type CaseloadContextValue = {
   state: AppState;
   hydrated: boolean;
+  persistStatus: PersistStatus;
+  lastSavedAtMs: number | null;
   setState: (next: AppState | ((prev: AppState) => AppState)) => void;
   resetDemo: () => void;
   resetEmpty: () => void;
+  resetWorkspace: () => void;
   setOnboardingCompleted: (done: boolean) => void;
+  exportWorkspaceBackup: () => void;
+  importWorkspaceFromJson: (
+    text: string
+  ) => { ok: true } | { ok: false; error: string };
   addStudent: (input: Omit<Student, "id" | "unavailableBlockIds">) => Student;
   updateStudent: (id: string, patch: Partial<Student>) => void;
   deleteStudent: (id: string) => void;
@@ -44,19 +67,57 @@ type CaseloadContextValue = {
 
 const CaseloadContext = createContext<CaseloadContextValue | null>(null);
 
-function persist(next: AppState) {
-  saveAppState(next);
-}
-
 export function CaseloadProvider({ children }: { children: React.ReactNode }) {
   const [state, setStateInternal] = useState<AppState>(emptyAppState);
   const [hydrated, setHydrated] = useState(false);
+  const [persistStatus, setPersistStatus] = useState<PersistStatus>("saved");
+  const [lastSavedAtMs, setLastSavedAtMs] = useState<number | null>(null);
+
+  const hydratedRef = useRef(false);
+  const stateRef = useRef<AppState>(emptyAppState);
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useLayoutEffect(() => {
-    // Hydrate from localStorage after mount (SSR-safe). Intentional one-time sync.
+    stateRef.current = state;
+  }, [state]);
+
+  const clearPersistTimer = useCallback(() => {
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+  }, []);
+
+  const flushSave = useCallback((snapshot: AppState) => {
+    saveAppState(snapshot);
+    const t = Date.now();
+    setLastSavedAtMs(t);
+    setPersistStatus("saved");
+  }, []);
+
+  const queuePersist = useCallback(() => {
+    if (!hydratedRef.current) return;
+    setPersistStatus((s) => (s === "saving" ? s : "unsaved"));
+    clearPersistTimer();
+    persistTimerRef.current = setTimeout(() => {
+      persistTimerRef.current = null;
+      setPersistStatus("saving");
+      flushSave(stateRef.current);
+    }, DEBOUNCE_MS);
+  }, [clearPersistTimer, flushSave]);
+
+  useLayoutEffect(() => {
     queueMicrotask(() => {
-      setStateInternal(loadAppState());
+      const loaded = loadAppState();
+      stateRef.current = loaded;
+      setStateInternal(loaded);
+      const meta = loadWorkspaceMeta();
+      setLastSavedAtMs(
+        meta?.lastSavedAt ? new Date(meta.lastSavedAt).getTime() : null
+      );
+      hydratedRef.current = true;
       setHydrated(true);
+      setPersistStatus("saved");
     });
   }, []);
 
@@ -64,24 +125,71 @@ export function CaseloadProvider({ children }: { children: React.ReactNode }) {
     (next: AppState | ((prev: AppState) => AppState)) => {
       setStateInternal((prev) => {
         const resolved = typeof next === "function" ? next(prev) : next;
-        persist(resolved);
+        stateRef.current = resolved;
+        if (hydratedRef.current) {
+          queuePersist();
+        }
         return resolved;
       });
     },
-    []
+    [queuePersist]
   );
 
   const resetDemo = useCallback(() => {
+    clearPersistTimer();
     const next = structuredClone(demoAppState);
+    stateRef.current = next;
     setStateInternal(next);
-    persist(next);
-  }, []);
+    flushSave(next);
+    queueMicrotask(() => {
+      trackEvent("demo_loaded", buildSafeAnalyticsContext(next));
+    });
+  }, [clearPersistTimer, flushSave]);
 
   const resetEmpty = useCallback(() => {
-    const next = { ...emptyAppState };
+    clearPersistTimer();
+    const next = {
+      ...emptyAppState,
+      onboardingCompleted: stateRef.current.onboardingCompleted,
+    };
+    stateRef.current = next;
     setStateInternal(next);
-    persist(next);
+    flushSave(next);
+  }, [clearPersistTimer, flushSave]);
+
+  const exportWorkspaceBackup = useCallback(() => {
+    const snap = stateRef.current;
+    const json = buildWorkspaceExportJson(snap);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = suggestedBackupFilename();
+    a.click();
+    URL.revokeObjectURL(url);
+    queueMicrotask(() => {
+      trackEvent("workspace_exported", buildSafeAnalyticsContext(snap));
+      window.dispatchEvent(new Event("caseloadflow:backup_exported"));
+    });
   }, []);
+
+  const importWorkspaceFromJson = useCallback(
+    (text: string): { ok: true } | { ok: false; error: string } => {
+      const { state: next, error } = parseWorkspaceImportJson(text);
+      if (!next || error) {
+        return { ok: false, error: error ?? "Could not read that backup file." };
+      }
+      clearPersistTimer();
+      stateRef.current = next;
+      setStateInternal(next);
+      flushSave(next);
+      queueMicrotask(() => {
+        trackEvent("workspace_imported", buildSafeAnalyticsContext(next));
+      });
+      return { ok: true };
+    },
+    [clearPersistTimer, flushSave]
+  );
 
   const setOnboardingCompleted = useCallback(
     (done: boolean) => {
@@ -97,10 +205,16 @@ export function CaseloadProvider({ children }: { children: React.ReactNode }) {
         id: newId("stu"),
         unavailableBlockIds: [],
       };
-      setState((prev) => ({
-        ...prev,
-        students: [...prev.students, student],
-      }));
+      setState((prev) => {
+        const next = {
+          ...prev,
+          students: [...prev.students, student],
+        };
+        queueMicrotask(() => {
+          trackEvent("student_created", buildSafeAnalyticsContext(next));
+        });
+        return next;
+      });
       return student;
     },
     [setState]
@@ -139,10 +253,19 @@ export function CaseloadProvider({ children }: { children: React.ReactNode }) {
   const addAvailabilityBlock = useCallback(
     (input: Omit<AvailabilityBlock, "id">) => {
       const block: AvailabilityBlock = { ...input, id: newId("blk") };
-      setState((prev) => ({
-        ...prev,
-        availabilityBlocks: [...prev.availabilityBlocks, block],
-      }));
+      setState((prev) => {
+        const next = {
+          ...prev,
+          availabilityBlocks: [...prev.availabilityBlocks, block],
+        };
+        queueMicrotask(() => {
+          trackEvent(
+            "availability_block_created",
+            buildSafeAnalyticsContext(next)
+          );
+        });
+        return next;
+      });
       return block;
     },
     [setState]
@@ -177,10 +300,16 @@ export function CaseloadProvider({ children }: { children: React.ReactNode }) {
   const addSession = useCallback(
     (input: Omit<Session, "id">) => {
       const session: Session = { ...input, id: newId("ses") };
-      setState((prev) => ({
-        ...prev,
-        sessions: [...prev.sessions, session],
-      }));
+      setState((prev) => {
+        const next = {
+          ...prev,
+          sessions: [...prev.sessions, session],
+        };
+        queueMicrotask(() => {
+          trackEvent("session_created", buildSafeAnalyticsContext(next));
+        });
+        return next;
+      });
       return session;
     },
     [setState]
@@ -222,10 +351,15 @@ export function CaseloadProvider({ children }: { children: React.ReactNode }) {
     () => ({
       state,
       hydrated,
+      persistStatus,
+      lastSavedAtMs,
       setState,
       resetDemo,
       resetEmpty,
+      resetWorkspace: resetEmpty,
       setOnboardingCompleted,
+      exportWorkspaceBackup,
+      importWorkspaceFromJson,
       addStudent,
       updateStudent,
       deleteStudent,
@@ -240,10 +374,14 @@ export function CaseloadProvider({ children }: { children: React.ReactNode }) {
     [
       state,
       hydrated,
+      persistStatus,
+      lastSavedAtMs,
       setState,
       resetDemo,
       resetEmpty,
       setOnboardingCompleted,
+      exportWorkspaceBackup,
+      importWorkspaceFromJson,
       addStudent,
       updateStudent,
       deleteStudent,

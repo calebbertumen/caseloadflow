@@ -1,9 +1,10 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { AlertCircle, Pencil, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { AlertCircle, Pencil, Plus, Printer, Sparkles, Trash2, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -13,6 +14,8 @@ import {
 } from "@/components/ui/card";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { SessionDialog } from "@/components/schedule/session-dialog";
+import { usePrintAnalytics } from "@/components/analytics/use-print-analytics";
+import { useWorkspaceNudges } from "@/components/feedback/workspace-nudge-context";
 import { useCaseload } from "@/components/providers/caseload-provider";
 import {
   DAY_SHORT,
@@ -41,9 +44,14 @@ const slots = generateTimeSlots(
 export default function SchedulePage() {
   const { state, hydrated, addSession, updateSession, deleteSession } =
     useCaseload();
+  const { showScheduleUseful } = useWorkspaceNudges();
+  usePrintAnalytics(state, "schedule", showScheduleUseful);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Session | null>(null);
   const [defaultDay, setDefaultDay] = useState<DayOfWeek>(0);
+  const [defaultStartTime, setDefaultStartTime] = useState<string | undefined>(
+    undefined
+  );
 
   const conflicts = useMemo(() => detectConflicts(state), [state]);
   const conflictSessionIds = useMemo(() => {
@@ -79,15 +87,27 @@ export default function SchedulePage() {
     }
   };
 
-  const openNew = (day: DayOfWeek) => {
+  const openNew = (day: DayOfWeek, startTime?: string) => {
     setEditing(null);
     setDefaultDay(day);
+    setDefaultStartTime(startTime);
     setOpen(true);
+  };
+
+  const closeDialog = (v: boolean) => {
+    setOpen(v);
+    if (!v) {
+      setEditing(null);
+      setDefaultStartTime(undefined);
+    }
   };
 
   if (!hydrated) {
     return <div className="h-40 animate-pulse rounded-xl bg-muted" />;
   }
+
+  const hasStudents = state.students.length > 0;
+  const hasSessions = state.sessions.length > 0;
 
   return (
     <div className="space-y-6">
@@ -96,29 +116,83 @@ export default function SchedulePage() {
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
             Weekly schedule
           </h1>
-          <p className="text-muted-foreground">
-            Monday–Friday grid with {SLOT_STEP_MINUTES}-minute steps. Add sessions
-            manually — auto-scheduling can plug in here later.
+          <p className="max-w-2xl text-sm text-muted-foreground md:text-base">
+            Place individual or group therapy sessions on a Monday-Friday grid.
+            CaseloadFlow will check minutes and conflicts as you build.
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setEditing(null);
-            setDefaultDay(0);
-            setOpen(true);
-          }}
-        >
-          <Plus className="size-4" />
-          Add session
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={() => window.print()}>
+            <Printer className="size-4" />
+            Print
+          </Button>
+          <Button
+            type="button"
+            onClick={() => {
+              openNew(0);
+            }}
+          >
+            <Plus className="size-4" />
+            Add session
+          </Button>
+        </div>
       </div>
 
+      {!hasStudents ? (
+        <Card className="border-primary/15 bg-primary/[0.04] shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Users className="size-4 text-primary" aria-hidden />
+              Add students before building sessions
+            </CardTitle>
+            <CardDescription>
+              Sessions work best after you add your caseload and required weekly
+              minutes.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 sm:flex-row">
+            <Link href="/students" className={cn(buttonVariants(), "w-full sm:w-auto")}>
+              Add students
+            </Link>
+            <Link
+              href="/demo"
+              className={cn(
+                buttonVariants({ variant: "outline" }),
+                "inline-flex w-full items-center justify-center gap-2 sm:w-auto"
+              )}
+            >
+              <Sparkles className="size-4" aria-hidden />
+              Load sample data
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {hasStudents && !hasSessions ? (
+        <Card className="border-border/80 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">No sessions yet</CardTitle>
+            <CardDescription>
+              Click a time slot or use Add session to place your first therapy
+              block.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <Button type="button" onClick={() => openNew(0)}>
+              <Plus className="size-4" />
+              Add session
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="grid gap-6 xl:grid-cols-[1fr_280px]">
-        <Card className="min-w-0">
+        <Card className="min-w-0 border-border/80 shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">This week</CardTitle>
             <CardDescription>
-              Tap a day header to add a session prefilled for that day.
+              Click a time slot or use Add session to place therapy blocks manually.
+              Day headers open the form for that day.
             </CardDescription>
           </CardHeader>
           <CardContent className="px-0 sm:px-4">
@@ -155,10 +229,26 @@ export default function SchedulePage() {
                     </div>
                     {days.map((d) => {
                       const list = sessionsStarting(d, slot);
+                      const empty = list.length === 0;
                       return (
                         <div
                           key={`${slot}-${d}`}
-                          className="border-b border-l bg-background/50 p-1 align-top min-h-[52px]"
+                          role={empty ? "button" : undefined}
+                          tabIndex={empty ? 0 : undefined}
+                          onClick={() => {
+                            if (empty) openNew(d, slot);
+                          }}
+                          onKeyDown={(e) => {
+                            if (empty && (e.key === "Enter" || e.key === " ")) {
+                              e.preventDefault();
+                              openNew(d, slot);
+                            }
+                          }}
+                          className={cn(
+                            "border-b border-l bg-background/50 p-1 align-top min-h-[52px]",
+                            empty &&
+                              "cursor-pointer transition-colors hover:bg-primary/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          )}
                         >
                           <div className="flex flex-col gap-1">
                             {list.map((s) => {
@@ -187,7 +277,7 @@ export default function SchedulePage() {
                                         {s.sessionType}
                                       </div>
                                       <div className="text-muted-foreground">
-                                        {s.startTime}–{s.endTime}
+                                        {s.startTime}-{s.endTime}
                                         {!s.countsTowardMinutes && (
                                           <Badge variant="outline" className="ml-1 text-[9px] px-1 py-0">
                                             non-IEP
@@ -205,8 +295,11 @@ export default function SchedulePage() {
                                         variant="ghost"
                                         className="size-6"
                                         aria-label="Edit session"
-                                        onClick={() => {
+                                        onClick={(e) => {
+                                          e.stopPropagation();
                                           setEditing(s);
+                                          setDefaultDay(s.dayOfWeek);
+                                          setDefaultStartTime(undefined);
                                           setOpen(true);
                                         }}
                                       >
@@ -218,7 +311,8 @@ export default function SchedulePage() {
                                         variant="ghost"
                                         className="size-6 text-destructive"
                                         aria-label="Delete session"
-                                        onClick={() => {
+                                        onClick={(e) => {
+                                          e.stopPropagation();
                                           if (window.confirm("Remove this session?")) {
                                             deleteSession(s.id);
                                           }
@@ -244,7 +338,7 @@ export default function SchedulePage() {
         </Card>
 
         <div className="space-y-4">
-          <Card>
+          <Card className="border-border/80 shadow-sm">
             <CardHeader>
               <CardTitle className="text-base">Unscheduled or partial</CardTitle>
               <CardDescription>
@@ -254,7 +348,7 @@ export default function SchedulePage() {
             <CardContent className="space-y-2 text-sm">
               {unscheduled.length === 0 ? (
                 <p className="text-muted-foreground">
-                  Everyone has their weekly minutes fully placed. Nice work.
+                  All required minutes are scheduled.
                 </p>
               ) : (
                 <ul className="space-y-2">
@@ -265,7 +359,7 @@ export default function SchedulePage() {
                         key={stu.id}
                         className="flex items-center justify-between gap-2 rounded-lg border bg-card px-3 py-2"
                       >
-                        <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex min-w-0 items-center gap-2">
                           <span
                             className={`size-2 shrink-0 rounded-full ${studentColorDotClass(stu.color)}`}
                           />
@@ -281,31 +375,42 @@ export default function SchedulePage() {
               )}
             </CardContent>
           </Card>
-          <Card className="border-amber-500/20">
+          <Card className="border-amber-500/20 shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <AlertCircle className="size-4 text-amber-600" />
+                <AlertCircle className="size-4 text-amber-600" aria-hidden />
                 Conflicts at a glance
               </CardTitle>
               <CardDescription>
                 {conflicts.length === 0
                   ? "No conflicts detected for this draft schedule."
-                  : `${conflicts.length} open items — see the Conflicts tab for detail.`}
+                  : `${conflicts.length} open items.`}
               </CardDescription>
             </CardHeader>
+            {conflicts.length > 0 ? (
+              <CardContent className="pt-0">
+                <Link
+                  href="/conflicts"
+                  className={cn(
+                    buttonVariants({ variant: "secondary", size: "sm" }),
+                    "flex w-full justify-center"
+                  )}
+                >
+                  Review conflicts
+                </Link>
+              </CardContent>
+            ) : null}
           </Card>
         </div>
       </div>
 
       <SessionDialog
         open={open}
-        onOpenChange={(v) => {
-          setOpen(v);
-          if (!v) setEditing(null);
-        }}
+        onOpenChange={closeDialog}
         session={editing}
         studentOptions={studentOptions}
         defaultDay={editing?.dayOfWeek ?? defaultDay}
+        defaultStartTime={editing ? undefined : defaultStartTime}
         onSave={onSave}
       />
     </div>
