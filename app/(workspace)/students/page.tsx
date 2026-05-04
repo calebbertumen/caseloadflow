@@ -22,20 +22,43 @@ import {
 } from "@/components/ui/table";
 import { StudentDialog } from "@/components/students/student-dialog";
 import { useCaseload } from "@/components/providers/caseload-provider";
+import { WorkspaceSampleBadge } from "@/components/workspace/workspace-sample-badge";
 import { cn } from "@/lib/utils";
 import { summarizeStudentMinutes } from "@/lib/minute-utils";
 import { studentColorDotClass } from "@/lib/student-colors";
+import { isOfficialDemoWorkspace } from "@/lib/workspace-utils";
 import type { Student, StudentMinuteSummary } from "@/lib/types";
 import type { StudentFormValues } from "@/lib/validation";
 
 function statusBadge(summary: StudentMinuteSummary) {
   if (summary.scheduleStatus === "scheduled") {
-    return <Badge variant="secondary">Complete</Badge>;
+    return (
+      <Badge
+        variant="outline"
+        className="border-emerald-500/30 bg-emerald-500/10 font-normal text-emerald-950 dark:text-emerald-100"
+      >
+        Complete
+      </Badge>
+    );
   }
   if (summary.scheduleStatus === "partially_scheduled") {
-    return <Badge variant="outline">Needs minutes</Badge>;
+    return (
+      <Badge
+        variant="outline"
+        className="border-amber-500/35 bg-amber-500/10 font-normal text-amber-950 dark:text-amber-100"
+      >
+        Needs minutes
+      </Badge>
+    );
   }
-  return <Badge variant="destructive">Unscheduled</Badge>;
+  return (
+    <Badge
+      variant="outline"
+      className="border-rose-500/35 bg-rose-500/10 font-normal text-rose-950 dark:text-rose-100"
+    >
+      Unscheduled
+    </Badge>
+  );
 }
 
 export default function StudentsPage() {
@@ -52,6 +75,20 @@ export default function StudentsPage() {
       })),
     [state.students, state.sessions]
   );
+
+  const rosterSummary = useMemo(() => {
+    let complete = 0;
+    let partial = 0;
+    let unsched = 0;
+    for (const { summary } of rows) {
+      if (summary.scheduleStatus === "scheduled") complete++;
+      else if (summary.scheduleStatus === "partially_scheduled") partial++;
+      else unsched++;
+    }
+    return { complete, partial, unsched };
+  }, [rows]);
+
+  const isSample = isOfficialDemoWorkspace(state);
 
   const openNew = () => {
     setEditing(null);
@@ -78,20 +115,43 @@ export default function StudentsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div className="space-y-1">
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            Students
-          </h1>
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="font-heading text-2xl font-semibold tracking-tight">
+              Students
+            </h1>
+            <WorkspaceSampleBadge variant="compact" />
+          </div>
           <p className="max-w-2xl text-sm text-muted-foreground md:text-base">
             Add students or initials, weekly service minutes, teacher or classroom
             labels, and session preferences.
           </p>
+          {isSample ? (
+            <p className="text-xs text-muted-foreground">
+              Demo uses fictional first names only. For real use, initials or
+              nicknames are recommended.
+            </p>
+          ) : null}
         </div>
-        <Button onClick={openNew}>
+        <Button onClick={openNew} variant={isSample ? "secondary" : "default"}>
           <Plus className="size-4" />
           Add student
         </Button>
       </div>
+
+      {state.students.length > 0 ? (
+        <p className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{state.students.length} students</span>
+          {" · "}
+          {rosterSummary.complete} complete · {rosterSummary.partial} partial ·{" "}
+          {rosterSummary.unsched} unscheduled
+          {isSample ? (
+            <span className="mt-1 block text-xs">
+              Try editing one student to see scheduled minutes update.
+            </span>
+          ) : null}
+        </p>
+      ) : null}
 
       {state.students.length === 0 ? (
         <Card className="border-border/80 shadow-sm">
@@ -130,8 +190,12 @@ export default function StudentsPage() {
         </Card>
       ) : (
         <Card className="border-border/80 shadow-sm">
-          <CardHeader className="sr-only">
-            <CardTitle>Caseload table</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Caseload</CardTitle>
+            <CardDescription>
+              Scheduled minutes update automatically from sessions that count toward
+              IEP time.
+            </CardDescription>
           </CardHeader>
           <CardContent className="px-0 sm:px-4">
             <div className="overflow-x-auto">

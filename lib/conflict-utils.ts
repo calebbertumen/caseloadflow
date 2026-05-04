@@ -87,10 +87,12 @@ export function detectConflicts(state: AppState): Conflict[] {
           id: stableId(["overlap", a.id, b.id]),
           type: "session_overlap",
           severity: "error",
-          message: "Two sessions overlap on the same day.",
+          message:
+            "Two sessions share overlapping minutes on the same day (30-minute blocks are fine—this is about times that collide, not length).",
           affectedStudentIds: [...new Set([...a.studentIds, ...b.studentIds])],
           affectedSessionIds: [a.id, b.id],
-          suggestedFix: "Move one session to a different time or shorten durations.",
+          suggestedFix:
+            "Stagger or shorten so one session ends before the other starts, or remove a duplicate.",
         });
       }
     }
@@ -117,10 +119,11 @@ export function detectConflicts(state: AppState): Conflict[] {
             id: stableId(["double", student.id, a.id, b.id]),
             type: "student_double_booked",
             severity: "error",
-            message: `${student.name} is double-booked.`,
+            message: `${student.name} has two overlapping sessions (same person can’t be in two places at once).`,
             affectedStudentIds: [student.id],
             affectedSessionIds: [a.id, b.id],
-            suggestedFix: "Move one session so times do not overlap.",
+            suggestedFix:
+              "Move one session so it fully ends before the other begins, or merge into one block.",
           });
         }
       }

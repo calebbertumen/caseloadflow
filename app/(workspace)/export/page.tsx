@@ -23,10 +23,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useCaseload } from "@/components/providers/caseload-provider";
+import { WorkspaceSampleBadge } from "@/components/workspace/workspace-sample-badge";
+import { isOfficialDemoWorkspace } from "@/lib/workspace-utils";
 import { cn } from "@/lib/utils";
 import { DAY_LABELS, DAY_SHORT } from "@/lib/constants";
-import { detectConflicts } from "@/lib/conflict-utils";
-import { allStudentMinuteSummaries, summarizeStudentMinutes } from "@/lib/minute-utils";
+import { conflictCounts, detectConflicts } from "@/lib/conflict-utils";
+import {
+  aggregateRemainingMinutes,
+  aggregateRequiredMinutes,
+  allStudentMinuteSummaries,
+  summarizeStudentMinutes,
+  totalScheduledStudentMinutes,
+} from "@/lib/minute-utils";
 import { sessionDurationMinutes } from "@/lib/schedule-utils";
 import type { DayOfWeek } from "@/lib/types";
 
@@ -35,7 +43,27 @@ export default function ExportPage() {
   const { showScheduleUseful } = useWorkspaceNudges();
   usePrintAnalytics(state, "export", showScheduleUseful);
   const conflicts = useMemo(() => detectConflicts(state), [state]);
+  const conflictSummary = useMemo(() => conflictCounts(conflicts), [conflicts]);
   const summaries = useMemo(() => allStudentMinuteSummaries(state), [state]);
+  const required = useMemo(
+    () => aggregateRequiredMinutes(state.students),
+    [state.students]
+  );
+  const scheduled = useMemo(
+    () => totalScheduledStudentMinutes(state.students, state.sessions),
+    [state.students, state.sessions]
+  );
+  const remaining = useMemo(
+    () => aggregateRemainingMinutes(state.students, state.sessions),
+    [state.students, state.sessions]
+  );
+  const printDate = useMemo(
+    () =>
+      new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+      }).format(new Date()),
+    []
+  );
   const unscheduled = useMemo(
     () =>
       state.students.filter(
@@ -60,6 +88,7 @@ export default function ExportPage() {
   }, [state]);
 
   const hasSessions = state.sessions.length > 0;
+  const isSample = isOfficialDemoWorkspace(state);
 
   if (!hydrated) {
     return <div className="h-40 animate-pulse rounded-xl bg-muted" />;
@@ -68,13 +97,19 @@ export default function ExportPage() {
   return (
     <div className="space-y-6">
       <div className="no-print flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div className="space-y-1">
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            Print & export
-          </h1>
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="font-heading text-2xl font-semibold tracking-tight">
+              Print & export
+            </h1>
+            <WorkspaceSampleBadge variant="compact" />
+          </div>
           <p className="max-w-2xl text-sm text-muted-foreground md:text-base">
             Print a clean weekly schedule, service-minute summary, and conflict
             summary from your current workspace.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Minutes update as you edit sessions. Conflicts are plain-English planning checks.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -85,23 +120,18 @@ export default function ExportPage() {
             </Button>
           ) : null}
           <Link href="/schedule" className={cn(buttonVariants({ variant: "outline" }))}>
-            Go to schedule
+            Back to schedule
           </Link>
-          {hasSessions ? (
-            <Link
-              href="/settings"
-              className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-muted-foreground")}
-            >
-              Export workspace backup
-            </Link>
-          ) : null}
         </div>
       </div>
 
       <p className="no-print text-xs text-muted-foreground">
-        Need a full workspace backup?{" "}
-        <Link href="/settings" className="font-medium text-primary underline-offset-4 hover:underline">
-          Export from Settings
+        Export workspace backup from{" "}
+        <Link
+          href="/settings#backup-restore"
+          className="font-medium text-primary underline-offset-4 hover:underline"
+        >
+          Settings → Backup & restore
         </Link>
         .
       </p>
@@ -133,13 +163,51 @@ export default function ExportPage() {
       ) : null}
 
       {hasSessions ? (
-      <div className="print-break-inside-avoid space-y-8">
+      <div className="print-area print-break-inside-avoid space-y-8">
         <header className="border-b pb-4">
           <h2 className="text-xl font-semibold">Weekly therapy schedule</h2>
           <p className="text-sm text-muted-foreground">
-            {state.settings.slpDisplayName} · CaseloadFlow export
+            {state.settings.slpDisplayName}
+            {isSample ? " (fictional)" : ""} · Created with CaseloadFlow · {printDate}
           </p>
         </header>
+
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-5 print:grid-cols-5">
+          <div className="rounded-lg border bg-muted/20 px-3 py-2 text-center">
+            <div className="text-[10px] font-medium uppercase text-muted-foreground">
+              Students
+            </div>
+            <div className="text-lg font-semibold tabular-nums">{state.students.length}</div>
+          </div>
+          <div className="rounded-lg border bg-muted/20 px-3 py-2 text-center">
+            <div className="text-[10px] font-medium uppercase text-muted-foreground">
+              Required min
+            </div>
+            <div className="text-lg font-semibold tabular-nums">{required}</div>
+          </div>
+          <div className="rounded-lg border bg-muted/20 px-3 py-2 text-center">
+            <div className="text-[10px] font-medium uppercase text-muted-foreground">
+              Scheduled
+            </div>
+            <div className="text-lg font-semibold tabular-nums">{scheduled}</div>
+          </div>
+          <div className="rounded-lg border bg-muted/20 px-3 py-2 text-center">
+            <div className="text-[10px] font-medium uppercase text-muted-foreground">
+              Remaining
+            </div>
+            <div className="text-lg font-semibold tabular-nums">{remaining}</div>
+          </div>
+          <div className="rounded-lg border bg-muted/20 px-3 py-2 text-center sm:col-span-1">
+            <div className="text-[10px] font-medium uppercase text-muted-foreground">
+              Issues
+            </div>
+            <div className="text-lg font-semibold tabular-nums">
+              {conflicts.length === 0
+                ? "0"
+                : `${conflictSummary.errors}e · ${conflictSummary.warnings}w`}
+            </div>
+          </div>
+        </section>
 
         {([0, 1, 2, 3, 4] as const).map((d) => (
           <section key={d} className="print-break-inside-avoid space-y-2">
@@ -223,16 +291,37 @@ export default function ExportPage() {
           </Table>
         </section>
 
-        <section className="print-break-inside-avoid space-y-2">
+        <section className="print-break-inside-avoid space-y-3">
           <h3 className="text-sm font-semibold">Conflict summary</h3>
           {conflicts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No conflicts detected.</p>
+            <p className="text-sm text-muted-foreground">No issues flagged.</p>
           ) : (
-            <ul className="list-disc space-y-1 pl-5 text-sm">
-              {conflicts.map((c) => (
-                <li key={c.id}>{c.message}</li>
-              ))}
-            </ul>
+            <div className="space-y-3 text-sm">
+              {conflicts.some((c) => c.severity === "error") ? (
+                <div>
+                  <p className="font-medium text-foreground">Errors to review</p>
+                  <ul className="mt-1 list-disc space-y-1 pl-5">
+                    {conflicts
+                      .filter((c) => c.severity === "error")
+                      .map((c) => (
+                        <li key={c.id}>{c.message}</li>
+                      ))}
+                  </ul>
+                </div>
+              ) : null}
+              {conflicts.some((c) => c.severity !== "error") ? (
+                <div>
+                  <p className="font-medium text-foreground">Warnings</p>
+                  <ul className="mt-1 list-disc space-y-1 pl-5">
+                    {conflicts
+                      .filter((c) => c.severity !== "error")
+                      .map((c) => (
+                        <li key={c.id}>{c.message}</li>
+                      ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
           )}
         </section>
 
@@ -260,19 +349,21 @@ export default function ExportPage() {
       </div>
       ) : null}
 
-      <Card className="no-print border-border/80 shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">Printing tips</CardTitle>
-          <CardDescription>
+      <details className="no-print group rounded-lg border border-border/60 bg-muted/20 text-sm">
+        <summary className="cursor-pointer px-4 py-3 font-medium text-foreground marker:text-muted-foreground">
+          Printing tips
+        </summary>
+        <div className="space-y-2 border-t px-4 py-3 text-muted-foreground">
+          <p>
             In the print dialog, disable headers and footers for a cleaner page, and
             choose Save as PDF if you want a file without uploading anything.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          Day columns in the app use {DAY_SHORT[0]}-{DAY_SHORT[4]} labels; this export
-          lists each weekday in order for handouts.
-        </CardContent>
-      </Card>
+          </p>
+          <p>
+            Day columns in the app use {DAY_SHORT[0]}-{DAY_SHORT[4]} labels; this export
+            lists each weekday in order for handouts.
+          </p>
+        </div>
+      </details>
     </div>
   );
 }

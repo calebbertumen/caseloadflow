@@ -33,7 +33,8 @@ import {
 } from "@/lib/analytics";
 import { betaListMailto, LOCAL_DATA_LIMITATION } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { workspaceHasContent } from "@/lib/workspace-utils";
+import { isOfficialDemoWorkspace, workspaceHasContent } from "@/lib/workspace-utils";
+import { WorkspaceSampleBadge } from "@/components/workspace/workspace-sample-badge";
 
 const settingsSchema = z.object({
   slpDisplayName: z.string().max(80),
@@ -123,18 +124,27 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="space-y-1">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Settings & backup
-        </h1>
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">
+            Settings & backup
+          </h1>
+          <WorkspaceSampleBadge variant="compact" />
+        </div>
         <p className="max-w-2xl text-sm text-muted-foreground md:text-base">
           Manage your local workspace, export backups, and update simple scheduling
           defaults.
         </p>
+        {isOfficialDemoWorkspace(state) ? (
+          <p className="max-w-2xl rounded-md border border-primary/15 bg-primary/[0.04] px-3 py-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Sample workspace: </span>
+            names and times are fictional. Export anytime if you want a copy of this
+            demo layout.
+          </p>
+        ) : null}
       </div>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-foreground">1. Workspace basics</h2>
         <Card className="border-border/80 shadow-sm">
           <CardHeader>
             <CardTitle className="text-base">Workspace basics</CardTitle>
@@ -184,7 +194,6 @@ export default function SettingsPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-foreground">2. Local browser saving</h2>
         <Card className="border-border/80 bg-muted/30 shadow-sm">
           <CardHeader>
             <CardTitle className="text-base">Local browser saving</CardTitle>
@@ -192,21 +201,23 @@ export default function SettingsPage() {
               Your workspace is stored only in this browser. {LOCAL_DATA_LIMITATION}
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <Button type="button" variant="secondary" onClick={() => exportWorkspaceBackup()}>
-              <Download className="size-4" />
-              Export backup
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              Import and reset options are in Backup & restore below.
+          <CardContent className="text-sm text-muted-foreground">
+            <p>
+              Export a backup in{" "}
+              <a
+                href="#backup-restore"
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
+                Backup & restore
+              </a>{" "}
+              below.
             </p>
           </CardContent>
         </Card>
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-foreground">3. Backup & restore</h2>
-        <Card className="border-border/80 shadow-sm">
+        <Card id="backup-restore" className="border-border/80 scroll-mt-8 shadow-sm">
           <CardHeader>
             <CardTitle className="text-base">Backup & restore</CardTitle>
             <CardDescription>
@@ -225,15 +236,15 @@ export default function SettingsPage() {
                 if (f) runImportFromFile(f);
               }}
             />
-            <Button type="button" variant="secondary" onClick={() => exportWorkspaceBackup()}>
+            <Button type="button" onClick={() => exportWorkspaceBackup()}>
               <Download className="size-4" />
               Export backup
             </Button>
-            <Button type="button" variant="outline" onClick={requestImport}>
+            <Button type="button" variant="secondary" onClick={requestImport}>
               <Upload className="size-4" />
               Import backup
             </Button>
-            <Button type="button" variant="outline" onClick={requestSample}>
+            <Button type="button" variant="secondary" onClick={requestSample}>
               <Sparkles className="size-4" />
               Load sample data
             </Button>
@@ -251,7 +262,6 @@ export default function SettingsPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-muted-foreground">4. Future cloud save</h2>
         <Card className="border-border/60 bg-muted/20 shadow-sm">
           <CardHeader>
             <CardTitle className="text-base font-normal text-muted-foreground">
@@ -259,7 +269,7 @@ export default function SettingsPage() {
             </CardTitle>
             <CardDescription>
               Want cloud save later? Tell us what would make CaseloadFlow worth using
-              weekly.
+              weekly — no promise of timing or features; we read every note.
             </CardDescription>
           </CardHeader>
           <CardContent>

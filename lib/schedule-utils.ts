@@ -19,6 +19,20 @@ export function sessionDurationMinutes(session: Session): number {
   );
 }
 
+/**
+ * Whether a session's start time falls in [slotStart, slotStart + stepMinutes).
+ * Used so the grid row for e.g. 09:00 shows 09:15 starts when the grid step is 30m.
+ */
+export function sessionStartFallsInSlot(
+  sessionStartTime: string,
+  slotStartTime: string,
+  stepMinutes: number
+): boolean {
+  const s = parseTimeToMinutes(sessionStartTime);
+  const a = parseTimeToMinutes(slotStartTime);
+  return s >= a && s < a + stepMinutes;
+}
+
 export function intervalsOverlap(
   aStart: number,
   aEnd: number,

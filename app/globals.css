@@ -136,4 +136,16 @@
   .print-break-inside-avoid {
     break-inside: avoid;
   }
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11pt;
+  }
+  .print-area,
+  .print-area * {
+    color: black !important;
+  }
+  a[href^="http"]::after {
+    content: none !important;
+  }
 }

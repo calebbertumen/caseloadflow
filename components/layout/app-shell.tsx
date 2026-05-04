@@ -25,9 +25,9 @@ import { FeedbackProvider } from "@/components/feedback/feedback-context";
 import { GiveFeedbackButton } from "@/components/feedback/give-feedback-button";
 import { WorkspaceNudgeProvider } from "@/components/feedback/workspace-nudge-context";
 import { useCaseload } from "@/components/providers/caseload-provider";
-import { SampleWorkspaceBanner } from "@/components/workspace/sample-workspace-banner";
+import { WorkspaceSampleBadge } from "@/components/workspace/workspace-sample-badge";
 import { WorkspaceSaveIndicator } from "@/components/workspace/workspace-save-indicator";
-import { workspaceHasContent } from "@/lib/workspace-utils";
+import { isOfficialDemoWorkspace, workspaceHasContent } from "@/lib/workspace-utils";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -42,13 +42,19 @@ const nav = [
 function SidebarBottom({ onNavigate }: { onNavigate?: () => void }) {
   const { state, hydrated } = useCaseload();
   const showSample = hydrated && !workspaceHasContent(state);
+  const showSampleBadge = hydrated && isOfficialDemoWorkspace(state);
 
   return (
     <div className="space-y-2 border-t p-4">
-      <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-2.5 py-2 text-[11px] leading-snug text-muted-foreground">
-        <CheckCircle2 className="size-3.5 shrink-0 text-primary" aria-hidden />
+      <div className="flex items-center gap-2 rounded-md border border-border/40 bg-muted/20 px-2 py-1.5 text-[10px] leading-snug text-muted-foreground">
+        <CheckCircle2 className="size-3 shrink-0 text-primary/90" aria-hidden />
         <span>Browser-saved workspace</span>
       </div>
+      {showSampleBadge ? (
+        <div className="flex justify-center">
+          <WorkspaceSampleBadge variant="compact" />
+        </div>
+      ) : null}
       {showSample ? (
         <Link
           href="/demo"
@@ -91,7 +97,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return cn(
       "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
       active
-        ? "bg-primary/10 font-medium text-primary"
+        ? "bg-primary/10 font-medium text-primary shadow-sm ring-1 ring-primary/10"
         : "text-muted-foreground hover:bg-muted hover:text-foreground",
       mobile && "text-base"
     );
@@ -159,14 +165,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </SheetContent>
                 </Sheet>
               </div>
-              <WorkspaceSaveIndicator />
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <WorkspaceSampleBadge variant="header" />
+                <WorkspaceSaveIndicator />
+              </div>
             </header>
             <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-8 md:py-8">
-              <div className="no-print mb-3 hidden md:flex md:justify-end">
+              <div className="no-print mb-3 hidden md:flex md:items-center md:justify-end md:gap-2">
+                <WorkspaceSampleBadge variant="header" />
                 <WorkspaceSaveIndicator />
               </div>
               <ContextualNudgeBanners />
-              <SampleWorkspaceBanner />
               {children}
             </main>
           </div>

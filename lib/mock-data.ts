@@ -33,8 +33,9 @@ const students: Student[] = [
     name: "Rio",
     grade: "1st",
     teacher: "Rm 204",
-    requiredMinutesPerWeek: 60,
-    preferredSessionLength: 20,
+    /** Tuned so Tue + Wed lunch session = exactly required (lunch still flags overlap). */
+    requiredMinutesPerWeek: 55,
+    preferredSessionLength: 30,
     sessionType: "flexible",
     unavailableBlockIds: [],
     notes: "",
@@ -45,11 +46,11 @@ const students: Student[] = [
     name: "Mo",
     grade: "5th",
     teacher: "Ms. Avery",
-    requiredMinutesPerWeek: 45,
+    requiredMinutesPerWeek: 30,
     preferredSessionLength: 30,
     sessionType: "individual",
     unavailableBlockIds: ["blk-art-demo"],
-    notes: "Sample: tied to a fictional pull-out block.",
+    notes: "Fictional pull-out tie-in for the sample.",
     color: colors[3],
   },
   {
@@ -121,22 +122,13 @@ const students: Student[] = [
     preferredSessionLength: 30,
     sessionType: "individual",
     unavailableBlockIds: [],
-    notes: "Sample: not yet placed on the grid.",
+    notes: "Fictional sample student.",
     color: colors[3],
   },
 ];
 
+/** Six blocks: five school-wide + one student-specific (art pull-out). */
 const availabilityBlocks: AvailabilityBlock[] = [
-  {
-    id: "blk-room-demo",
-    label: "Classroom setup",
-    type: "classroom_unavailable",
-    dayOfWeek: 0,
-    startTime: "08:00",
-    endTime: "08:30",
-    appliesTo: "global",
-    notes: "Fictional school-wide hold",
-  },
   {
     id: "blk-recess-demo",
     label: "Recess",
@@ -198,169 +190,28 @@ const availabilityBlocks: AvailabilityBlock[] = [
 ];
 
 const sessions: Session[] = [
-  // Double-book Nina (Mon)
-  {
-    id: "ses-demo-d1a",
-    dayOfWeek: 0,
-    startTime: "09:00",
-    endTime: "09:30",
-    studentIds: ["demo-stu-01"],
-    sessionType: "individual",
-    location: "Speech room",
-    countsTowardMinutes: true,
-  },
-  {
-    id: "ses-demo-d1b",
-    dayOfWeek: 0,
-    startTime: "09:15",
-    endTime: "09:45",
-    studentIds: ["demo-stu-01"],
-    sessionType: "individual",
-    location: "Speech room",
-    countsTowardMinutes: true,
-  },
-  // Lunch overlap (Wed) — Kai + Rio
-  {
-    id: "ses-demo-lunch",
-    dayOfWeek: 2,
-    startTime: "11:45",
-    endTime: "12:10",
-    studentIds: ["demo-stu-02", "demo-stu-03"],
-    sessionType: "group",
-    location: "Hallway table",
-    countsTowardMinutes: true,
-  },
-  // Oversized group (Mon afternoon)
-  {
-    id: "ses-demo-big",
-    dayOfWeek: 0,
-    startTime: "14:00",
-    endTime: "14:30",
-    studentIds: [
-      "demo-stu-01",
-      "demo-stu-02",
-      "demo-stu-05",
-      "demo-stu-06",
-      "demo-stu-08",
-    ],
-    sessionType: "group",
-    location: "Speech room",
-    countsTowardMinutes: true,
-  },
-  // Empty session (warning)
-  {
-    id: "ses-demo-empty",
-    dayOfWeek: 1,
-    startTime: "15:00",
-    endTime: "15:30",
-    studentIds: [],
-    sessionType: "group",
-    countsTowardMinutes: false,
-  },
-  // Mo overlaps personal art pull-out block
-  {
-    id: "ses-demo-art",
-    dayOfWeek: 0,
-    startTime: "13:15",
-    endTime: "13:45",
-    studentIds: ["demo-stu-04"],
-    sessionType: "individual",
-    location: "Speech room",
-    countsTowardMinutes: true,
-  },
-  // Lane — partial minutes (45 / 120)
-  {
-    id: "ses-demo-lane",
-    dayOfWeek: 1,
-    startTime: "10:30",
-    endTime: "11:15",
-    studentIds: ["demo-stu-07"],
-    sessionType: "individual",
-    location: "Speech room",
-    countsTowardMinutes: true,
-  },
-  // Sky — on track
-  {
-    id: "ses-demo-sky",
-    dayOfWeek: 0,
-    startTime: "10:30",
-    endTime: "11:30",
-    studentIds: ["demo-stu-08"],
-    sessionType: "individual",
-    location: "Speech room",
-    countsTowardMinutes: true,
-  },
-  // JC — meets 45 min target
-  {
-    id: "ses-demo-jc",
-    dayOfWeek: 3,
-    startTime: "12:00",
-    endTime: "12:45",
-    studentIds: ["demo-stu-09"],
-    sessionType: "individual",
-    location: "Rm 112",
-    countsTowardMinutes: true,
-  },
-  // Kai — extra block (still short after conflicts resolved in real use)
-  {
-    id: "ses-demo-kai",
-    dayOfWeek: 0,
-    startTime: "08:30",
-    endTime: "09:00",
-    studentIds: ["demo-stu-02"],
-    sessionType: "individual",
-    location: "Speech room",
-    countsTowardMinutes: true,
-  },
-  // Rio
-  {
-    id: "ses-demo-rio",
-    dayOfWeek: 1,
-    startTime: "14:00",
-    endTime: "14:30",
-    studentIds: ["demo-stu-03"],
-    sessionType: "flexible",
-    location: "Hallway",
-    countsTowardMinutes: true,
-  },
-  // Tess + Owen Fri small group
-  {
-    id: "ses-demo-to",
-    dayOfWeek: 4,
-    startTime: "10:00",
-    endTime: "10:30",
-    studentIds: ["demo-stu-05", "demo-stu-06"],
-    sessionType: "group",
-    location: "Speech room",
-    countsTowardMinutes: true,
-  },
-  // Owen Wed AM (before lunch)
-  {
-    id: "ses-demo-owen-wed",
-    dayOfWeek: 2,
-    startTime: "09:00",
-    endTime: "09:30",
-    studentIds: ["demo-stu-06"],
-    sessionType: "individual",
-    location: "Speech room",
-    countsTowardMinutes: true,
-  },
-  // Small filler group Thu PM
-  {
-    id: "ses-demo-thu",
-    dayOfWeek: 3,
-    startTime: "14:00",
-    endTime: "14:30",
-    studentIds: ["demo-stu-01", "demo-stu-05"],
-    sessionType: "group",
-    location: "Speech room",
-    countsTowardMinutes: true,
-  },
+  { id: "ses-demo-kai", dayOfWeek: 0, startTime: "08:30", endTime: "09:00", studentIds: ["demo-stu-02"], sessionType: "individual", location: "Speech room", countsTowardMinutes: true },
+  { id: "ses-demo-nina-am", dayOfWeek: 0, startTime: "09:00", endTime: "09:30", studentIds: ["demo-stu-01"], sessionType: "individual", location: "Speech room", countsTowardMinutes: true },
+  { id: "ses-demo-sky", dayOfWeek: 0, startTime: "10:30", endTime: "11:30", studentIds: ["demo-stu-08"], sessionType: "individual", location: "Speech room", countsTowardMinutes: true },
+  { id: "ses-demo-art", dayOfWeek: 0, startTime: "13:15", endTime: "13:45", studentIds: ["demo-stu-04"], sessionType: "individual", location: "Speech room", countsTowardMinutes: true },
+  { id: "ses-demo-big", dayOfWeek: 0, startTime: "14:00", endTime: "14:30", studentIds: ["demo-stu-01", "demo-stu-02", "demo-stu-05", "demo-stu-06", "demo-stu-08"], sessionType: "group", location: "Speech room", countsTowardMinutes: true },
+  { id: "ses-demo-lane", dayOfWeek: 1, startTime: "10:30", endTime: "11:15", studentIds: ["demo-stu-07"], sessionType: "individual", location: "Speech room", countsTowardMinutes: true },
+  { id: "ses-demo-rio-tue", dayOfWeek: 1, startTime: "14:00", endTime: "14:30", studentIds: ["demo-stu-03"], sessionType: "flexible", location: "Hallway", countsTowardMinutes: true },
+  { id: "ses-demo-empty", dayOfWeek: 1, startTime: "15:00", endTime: "15:30", studentIds: [], sessionType: "group", countsTowardMinutes: false },
+  { id: "ses-demo-zee-b", dayOfWeek: 1, startTime: "09:00", endTime: "09:30", studentIds: ["demo-stu-10"], sessionType: "individual", location: "Speech room", countsTowardMinutes: true },
+  { id: "ses-demo-owen-wed", dayOfWeek: 2, startTime: "09:00", endTime: "09:30", studentIds: ["demo-stu-06"], sessionType: "individual", location: "Speech room", countsTowardMinutes: true },
+  { id: "ses-demo-nina-wed", dayOfWeek: 2, startTime: "10:00", endTime: "10:30", studentIds: ["demo-stu-01"], sessionType: "group", location: "Speech room", countsTowardMinutes: true },
+  { id: "ses-demo-rio-lunch", dayOfWeek: 2, startTime: "11:45", endTime: "12:10", studentIds: ["demo-stu-03"], sessionType: "group", location: "Hallway table", countsTowardMinutes: true },
+  { id: "ses-demo-jc", dayOfWeek: 3, startTime: "12:00", endTime: "12:45", studentIds: ["demo-stu-09"], sessionType: "individual", location: "Rm 112", countsTowardMinutes: true },
+  { id: "ses-demo-thu", dayOfWeek: 3, startTime: "14:00", endTime: "14:30", studentIds: ["demo-stu-01", "demo-stu-05"], sessionType: "group", location: "Speech room", countsTowardMinutes: true },
+  { id: "ses-demo-to", dayOfWeek: 4, startTime: "10:00", endTime: "10:30", studentIds: ["demo-stu-05", "demo-stu-06"], sessionType: "group", location: "Speech room", countsTowardMinutes: true },
+  { id: "ses-demo-zee-a", dayOfWeek: 0, startTime: "15:00", endTime: "16:00", studentIds: ["demo-stu-10"], sessionType: "individual", location: "Speech room", countsTowardMinutes: true },
+  { id: "ses-demo-kai-tue", dayOfWeek: 1, startTime: "08:00", endTime: "08:30", studentIds: ["demo-stu-02"], sessionType: "individual", location: "Speech room", countsTowardMinutes: true },
 ];
 
 /**
- * Rich fictional sample for “View demo” — not real students.
- * IDs are listed in `OFFICIAL_DEMO_STUDENT_ID_LIST` (constants) for detection.
+ * Fictional sample for “View demo” — tuned for a small set of clear conflicts.
+ * IDs match `OFFICIAL_DEMO_STUDENT_ID_LIST` in constants.
  */
 export const demoAppState: AppState = {
   schemaVersion: CURRENT_SCHEMA_VERSION,

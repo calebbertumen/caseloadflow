@@ -23,18 +23,41 @@ import {
   DEFAULT_SLOT_START,
   SLOT_STEP_MINUTES,
 } from "@/lib/constants";
-import { detectConflicts } from "@/lib/conflict-utils";
+import { conflictCounts, detectConflicts } from "@/lib/conflict-utils";
 import { summarizeStudentMinutes } from "@/lib/minute-utils";
 import {
   generateTimeSlots,
+  intervalsOverlap,
+  parseTimeToMinutes,
   sessionDurationMinutes,
+  sessionStartFallsInSlot,
 } from "@/lib/schedule-utils";
-import type { DayOfWeek, Session } from "@/lib/types";
+import type {
+  AvailabilityBlock,
+  ConflictType,
+  DayOfWeek,
+  Session,
+} from "@/lib/types";
 import type { SessionFormValues } from "@/lib/validation";
 import { studentColorDotClass } from "@/lib/student-colors";
 import { cn } from "@/lib/utils";
+import { WorkspaceSampleBadge } from "@/components/workspace/workspace-sample-badge";
 
 const days: DayOfWeek[] = [0, 1, 2, 3, 4];
+
+function blockTouchesSlot(
+  block: AvailabilityBlock,
+  day: DayOfWeek,
+  slot: string,
+  stepMinutes: number
+): boolean {
+  if (block.dayOfWeek !== day) return false;
+  const s0 = parseTimeToMinutes(slot);
+  const s1 = s0 + stepMinutes;
+  const b0 = parseTimeToMinutes(block.startTime);
+  const b1 = parseTimeToMinutes(block.endTime);
+  return intervalsOverlap(s0, s1, b0, b1);
+}
 const slots = generateTimeSlots(
   DEFAULT_SLOT_START,
   DEFAULT_SLOT_END,
@@ -54,9 +77,35 @@ export default function SchedulePage() {
   );
 
   const conflicts = useMemo(() => detectConflicts(state), [state]);
-  const conflictSessionIds = useMemo(() => {
+  const conflictSummary = useMemo(() => conflictCounts(conflicts), [conflicts]);
+
+  /** Overlaps, unavailable blocks, empty session, oversized group — tint red on grid. */
+  const hardConflictSessionTypes: ReadonlySet<ConflictType> = useMemo(
+    () =>
+      new Set([
+        "session_overlap",
+        "student_double_booked",
+        "student_unavailable",
+        "session_no_students",
+        "group_size",
+      ]),
+    []
+  );
+
+  const hardConflictSessionIds = useMemo(() => {
     const ids = new Set<string>();
     for (const c of conflicts) {
+      if (!hardConflictSessionTypes.has(c.type)) continue;
+      for (const id of c.affectedSessionIds) ids.add(id);
+    }
+    return ids;
+  }, [conflicts, hardConflictSessionTypes]);
+
+  /** Minute gap only — tint amber when no hard issue on that session. */
+  const minutesOnlySessionIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const c of conflicts) {
+      if (c.type !== "under_scheduled_minutes") continue;
       for (const id of c.affectedSessionIds) ids.add(id);
     }
     return ids;
@@ -74,10 +123,18 @@ export default function SchedulePage() {
     });
   }, [state.students, state.sessions]);
 
-  const sessionsStarting = (day: DayOfWeek, slot: string) =>
-    state.sessions.filter(
-      (s) => s.dayOfWeek === day && s.startTime === slot
-    );
+  /** Sessions whose start time falls inside this grid row (not only :00/:30 starts). */
+  const sessionsInSlot = (day: DayOfWeek, slot: string) =>
+    state.sessions
+      .filter(
+        (s) =>
+          s.dayOfWeek === day &&
+          sessionStartFallsInSlot(s.startTime, slot, SLOT_STEP_MINUTES)
+      )
+      .sort(
+        (a, b) =>
+          a.startTime.localeCompare(b.startTime) || a.id.localeCompare(b.id)
+      );
 
   const onSave = (values: SessionFormValues) => {
     if (editing) {
@@ -112,10 +169,13 @@ export default function SchedulePage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-        <div className="space-y-1">
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            Weekly schedule
-          </h1>
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="font-heading text-2xl font-semibold tracking-tight">
+              Weekly schedule
+            </h1>
+            <WorkspaceSampleBadge variant="compact" />
+          </div>
           <p className="max-w-2xl text-sm text-muted-foreground md:text-base">
             Place individual or group therapy sessions on a Monday-Friday grid.
             CaseloadFlow will check minutes and conflicts as you build.
@@ -194,6 +254,24 @@ export default function SchedulePage() {
               Click a time slot or use Add session to place therapy blocks manually.
               Day headers open the form for that day.
             </CardDescription>
+            <div className="no-print flex flex-wrap gap-x-4 gap-y-1 pt-2 text-[10px] text-muted-foreground">
+              <span>
+                <span className="inline-block size-2 rounded-sm bg-primary/25 align-middle" />{" "}
+                Teal tint = scheduled
+              </span>
+              <span>
+                <span className="inline-block size-2 rounded-sm bg-amber-500/40 align-middle" />{" "}
+                Amber = minutes gap
+              </span>
+              <span>
+                <span className="inline-block size-2 rounded-sm bg-destructive/35 align-middle" />{" "}
+                Red = hard conflict
+              </span>
+              <span>
+                <span className="inline-block size-2 rounded-sm bg-muted-foreground/25 align-middle" />{" "}
+                Gray cell = unavailable block window
+              </span>
+            </div>
           </CardHeader>
           <CardContent className="px-0 sm:px-4">
             <ScrollArea className="w-full">
@@ -228,13 +306,17 @@ export default function SchedulePage() {
                       {slot}
                     </div>
                     {days.map((d) => {
-                      const list = sessionsStarting(d, slot);
+                      const list = sessionsInSlot(d, slot);
                       const empty = list.length === 0;
+                      const hasUnavailable = state.availabilityBlocks.some((b) =>
+                        blockTouchesSlot(b, d, slot, SLOT_STEP_MINUTES)
+                      );
                       return (
                         <div
                           key={`${slot}-${d}`}
                           role={empty ? "button" : undefined}
                           tabIndex={empty ? 0 : undefined}
+                          title={empty ? "Add session" : undefined}
                           onClick={() => {
                             if (empty) openNew(d, slot);
                           }}
@@ -245,7 +327,9 @@ export default function SchedulePage() {
                             }
                           }}
                           className={cn(
-                            "border-b border-l bg-background/50 p-1 align-top min-h-[52px]",
+                            "border-b border-l p-1 align-top min-h-[52px]",
+                            hasUnavailable && "bg-muted/35",
+                            !hasUnavailable && "bg-background/50",
                             empty &&
                               "cursor-pointer transition-colors hover:bg-primary/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           )}
@@ -259,33 +343,39 @@ export default function SchedulePage() {
                                     "Unknown"
                                 )
                                 .join(", ");
-                              const bad = conflictSessionIds.has(s.id);
+                              const hardIssue = hardConflictSessionIds.has(s.id);
+                              const minutesOnly =
+                                !hardIssue && minutesOnlySessionIds.has(s.id);
                               return (
                                 <div
                                   key={s.id}
                                   className={cn(
                                     "rounded-md border px-2 py-1.5 text-[11px] leading-snug",
-                                    bad
-                                      ? "border-destructive/40 bg-destructive/10"
-                                      : "border-primary/20 bg-primary/5"
+                                    hardIssue &&
+                                      "border-destructive/40 bg-destructive/10",
+                                    minutesOnly &&
+                                      "border-amber-500/35 bg-amber-500/[0.08]",
+                                    !hardIssue &&
+                                      !minutesOnly &&
+                                      "border-primary/20 bg-primary/5"
                                   )}
                                 >
                                   <div className="flex items-start justify-between gap-1">
-                                    <div>
-                                      <div className="font-medium text-foreground">
-                                        {sessionDurationMinutes(s)} min ·{" "}
-                                        {s.sessionType}
+                                    <div className="min-w-0">
+                                      <div className="font-medium tabular-nums text-foreground">
+                                        {s.startTime}–{s.endTime} ·{" "}
+                                        {sessionDurationMinutes(s)} min
                                       </div>
-                                      <div className="text-muted-foreground">
-                                        {s.startTime}-{s.endTime}
-                                        {!s.countsTowardMinutes && (
-                                          <Badge variant="outline" className="ml-1 text-[9px] px-1 py-0">
+                                      <div className="truncate text-[10px] font-medium text-foreground/90">
+                                        {names || "No students"}
+                                      </div>
+                                      <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px] capitalize text-muted-foreground">
+                                        <span>{s.sessionType}</span>
+                                        {!s.countsTowardMinutes ? (
+                                          <Badge variant="outline" className="text-[9px] px-1 py-0 font-normal">
                                             non-IEP
                                           </Badge>
-                                        )}
-                                      </div>
-                                      <div className="mt-0.5 text-[10px] text-muted-foreground">
-                                        {names || "No students"}
+                                        ) : null}
                                       </div>
                                     </div>
                                     <div className="flex shrink-0 flex-col gap-0.5">
@@ -337,7 +427,7 @@ export default function SchedulePage() {
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
+        <div className="space-y-4 xl:sticky xl:top-20 xl:self-start">
           <Card className="border-border/80 shadow-sm">
             <CardHeader>
               <CardTitle className="text-base">Unscheduled or partial</CardTitle>
@@ -365,8 +455,10 @@ export default function SchedulePage() {
                           />
                           <span className="truncate font-medium">{stu.name}</span>
                         </div>
-                        <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
-                          {sum.scheduled}/{sum.required} min
+                        <span className="shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                          {sum.remaining > 0
+                            ? `${sum.remaining} min remaining`
+                            : "On target"}
                         </span>
                       </li>
                     );
@@ -382,9 +474,24 @@ export default function SchedulePage() {
                 Conflicts at a glance
               </CardTitle>
               <CardDescription>
-                {conflicts.length === 0
-                  ? "No conflicts detected for this draft schedule."
-                  : `${conflicts.length} open items.`}
+                {conflicts.length === 0 ? (
+                  "No issues flagged for this draft schedule."
+                ) : (
+                  <>
+                    <span className="font-medium text-foreground">
+                      {conflictSummary.errors} errors
+                    </span>
+                    {" · "}
+                    <span className="font-medium text-foreground">
+                      {conflictSummary.warnings} warnings
+                    </span>
+                    <span className="mt-1 block font-normal text-muted-foreground">
+                      Red blocks: overlaps, unavailable times, empty session, or large
+                      group. Amber: still short on weekly minutes (see Conflicts for
+                      full list).
+                    </span>
+                  </>
+                )}
               </CardDescription>
             </CardHeader>
             {conflicts.length > 0 ? (
@@ -392,7 +499,7 @@ export default function SchedulePage() {
                 <Link
                   href="/conflicts"
                   className={cn(
-                    buttonVariants({ variant: "secondary", size: "sm" }),
+                    buttonVariants({ size: "sm" }),
                     "flex w-full justify-center"
                   )}
                 >

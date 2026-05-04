@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { BlockDialog } from "@/components/availability/block-dialog";
 import { useCaseload } from "@/components/providers/caseload-provider";
+import { WorkspaceSampleBadge } from "@/components/workspace/workspace-sample-badge";
 import { DAY_LABELS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { AvailabilityBlock, DayOfWeek } from "@/lib/types";
@@ -44,9 +45,26 @@ function appliesLabel(b: AvailabilityBlock, studentNames: Map<string, string>) {
   if (b.appliesTo === "student") {
     const names =
       b.studentIds?.map((id) => studentNames.get(id) ?? id).join(", ") ?? "";
-    return names || "Students";
+    return names ? `Student-specific (${names})` : "Student-specific";
   }
-  return "Teacher note";
+  if (b.appliesTo === "teacher") return "Classroom";
+  return "Other";
+}
+
+function blockTypeBadgeClass(type: AvailabilityBlock["type"]): string {
+  const map: Partial<Record<AvailabilityBlock["type"], string>> = {
+    lunch: "border-sky-500/25 bg-sky-500/10 text-sky-950 dark:text-sky-100",
+    recess: "border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100",
+    specials: "border-violet-500/25 bg-violet-500/10 text-violet-950 dark:text-violet-100",
+    slp_unavailable: "border-amber-500/30 bg-amber-500/10 text-amber-950 dark:text-amber-100",
+    testing: "border-orange-500/25 bg-orange-500/10 text-orange-950 dark:text-orange-100",
+    classroom_unavailable:
+      "border-slate-500/25 bg-slate-500/10 text-slate-950 dark:text-slate-100",
+    student_unavailable:
+      "border-rose-500/25 bg-rose-500/10 text-rose-950 dark:text-rose-100",
+    other: "border-border bg-muted/50",
+  };
+  return map[type] ?? "border-border bg-muted/40";
 }
 
 export default function AvailabilityPage() {
@@ -83,6 +101,17 @@ export default function AvailabilityPage() {
     return m;
   }, [state.availabilityBlocks]);
 
+  const blockStats = useMemo(() => {
+    const total = state.availabilityBlocks.length;
+    const schoolWide = state.availabilityBlocks.filter(
+      (b) => b.appliesTo === "global" || b.appliesTo === "slp"
+    ).length;
+    const studentSpecific = state.availabilityBlocks.filter(
+      (b) => b.appliesTo === "student"
+    ).length;
+    return { total, schoolWide, studentSpecific };
+  }, [state.availabilityBlocks]);
+
   const onSave = (values: AvailabilityFormValues) => {
     const studentIds =
       values.appliesTo === "student" && values.studentIds.length > 0
@@ -107,13 +136,19 @@ export default function AvailabilityPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div className="space-y-1">
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            Unavailable times
-          </h1>
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="font-heading text-2xl font-semibold tracking-tight">
+              Unavailable times
+            </h1>
+            <WorkspaceSampleBadge variant="compact" />
+          </div>
           <p className="max-w-2xl text-sm text-muted-foreground md:text-base">
             Block the parts of the school week where sessions should not be placed,
             such as lunch, recess, specials, meetings, or classroom restrictions.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            These blocks are used to flag schedule overlaps on the weekly grid.
           </p>
         </div>
         <Button onClick={openAdd}>
@@ -161,6 +196,12 @@ export default function AvailabilityPage() {
         </Card>
       ) : (
         <div className="space-y-6">
+          <p className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{blockStats.total} blocks</span>
+            {" · "}
+            {blockStats.schoolWide} school-wide or SLP · {blockStats.studentSpecific}{" "}
+            student-specific
+          </p>
           {days.map((d) => {
             const list = blocksByDay.get(d) ?? [];
             if (list.length === 0) return null;
@@ -187,7 +228,13 @@ export default function AvailabilityPage() {
                           <TableRow key={b.id}>
                             <TableCell className="font-medium">{b.label}</TableCell>
                             <TableCell className="hidden sm:table-cell">
-                              <Badge variant="outline" className="font-normal">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "font-normal capitalize",
+                                  blockTypeBadgeClass(b.type)
+                                )}
+                              >
                                 {b.type.replace(/_/g, " ")}
                               </Badge>
                             </TableCell>
